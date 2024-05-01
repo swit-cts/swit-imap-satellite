@@ -1,0 +1,88 @@
+<script>
+    var user = {
+      disable: function() {
+          if($("input[name='chk_disable']:checked").length === 0) {
+              alert("비활성화 할 사용자를 선택해 주세요");
+              return;
+          }
+
+          let arr_disable = new Array();
+          $("input[name='chk_disable']:checked").each(function(index, item) {
+             arr_disable.push($(item).val());
+          });
+
+          $.ajax({
+              url: "/admin/user.disable",
+              method: "POST",
+              data: arr_disable.join(","),
+              dataType: "JSON",
+              success: function(response) {
+                  alert(response.message);
+              }
+          })
+
+          console.log(arr_disable);
+      }
+    };
+
+
+    $(document).ready(function() {
+        let table = new DataTable('#user-list', {
+            ordering: false
+        });
+    });
+</script>
+<header class="page-header page-header-compact page-header-light border-bottom bg-white mb-4">
+    <div class="container-fluid px-4">
+        <div class="page-header-content">
+            <div class="row align-items-center justify-content-between pt-3">
+                <div class="col-auto mb-3">
+                    <h1 class="page-header-title">
+                        <div class="page-header-icon"><i data-feather="user"></i></div>
+                        Users List
+                    </h1>
+                </div>
+                <div class="col-12 col-xl-auto mb-3">
+                    <button id="btn-disable" role="button" class="btn btn-sm btn-light text-bg-primary" onclick="user.disable()">
+                        <i class="me-1 fa-solid fa-user-xmark"></i>
+                        사용자 비활성화
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+<div class="container-fluid px-4">
+    <div class="card">
+        <div class="card-header">
+            <div class="icon-stack"><i class="fa fa-list"></i></div>
+            사용자 목록
+        </div>
+        <div class="card-body">
+            <table id="user-list" class="table mdl-data-table table-bordered table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>&nbsp;</th>
+                        <th class="text-center">아이디</th>
+                        <th class="text-center">이메일</th>
+                        <th class="text-center">등록일</th>
+                        <th class="text-center">권한</th>
+                        <th class="text-center">사용여부</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td class="text-center"><input type="checkbox" name="chk_disable" class="form-check-input" value="{{user.user_id}}"></td>
+                        <td class="text-truncate">{{user.user_id}}</td>
+                        <td>{{user.email}}</td>
+                        <td class="text-center">{{user.created_at}}</td>
+                        <td class="text-center">{{user.role}}</td>
+                        <td class="text-center">{{user.is_active}}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
