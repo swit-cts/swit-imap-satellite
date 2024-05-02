@@ -33,3 +33,11 @@ async def post_auth_signup(param: schema_user.UserAuth):
             return {"result": "OK"}
     except Exception as e:
         raise StarletteHTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=(e))
+
+
+@router.post(
+    path="/signin",
+    summary="사용자 로그인"
+)
+async def post_auth_siginin(param: schema_user.UserAuth):
+    return ""

@@ -25,17 +25,17 @@ async def email_picker():
             # 메일 목록 가져오기
             box_list = imap.get_box_list()
             # 읽지 않은 메일을 가져온다.
-            for box in box_list:
-                result, [msg_ids] = imap.search(mailbox=box, option=ImapSearchOption.UNSEEN)
-                if result == "OK":
-                    if len(msg_ids.split()) > 0:
-                        for uid in msg_ids.split():
-                            # UID를 이용해서 이메일을 읽어 온다.
-                            email = imap.get_message(box=box, user_id=user.user_id, uid=uid)
-                            # 수집 목록에 넣어준다.
-                            mails.append(email)
-                        # 저장한다.
-                        saved_count = service_mail.save_emails(mails=mails)
+            result, [msg_ids] = imap.search(mailbox="INBOX", option=ImapSearchOption.UNSEEN)
+            if result == "OK":
+                if len(msg_ids.split()) > 0:
+                    for uid in msg_ids.split():
+                        # UID를 이용해서 이메일을 읽어 온다.
+                        email = imap.get_message(user_id=user.user_id, uid=uid)
+                        email.eml_uid = int(uid)
+                        # 수집 목록에 넣어준다.
+                        mails.append(email)
+                    # 저장한다.
+                    saved_count = service_mail.save_emails(mails=mails)
             else:
                 raise Exception(result)
             imap.close()

@@ -1,8 +1,9 @@
 import os
-import imaplib
 import email
+import imaplib
 from enum import Enum
 from email import policy
+from email.header import decode_header
 from app.const import const
 from app.schemas import schema_email
 
@@ -47,7 +48,7 @@ class ImapUtil:
         else:
             return None
 
-    def get_message(self, box:str, user_id: str, uid: int) ->  schema_email.Email:
+    def get_message(self, user_id: str, uid: int) ->  schema_email.Email:
         try:
             # 메일 정보 읽기
             result, data = self.session.fetch(uid, "(RFC822)")
@@ -55,13 +56,12 @@ class ImapUtil:
             if result == "OK":
                 # 메일 기본정보 출력
                 raw_email = data[0][1]
-                raw_email_string = raw_email.decode("utf-8")
+                raw_email_string = raw_email.decode("UTF-8", "ignore")
                 email_message = email.message_from_string(s=raw_email_string, policy=policy.default)
                 subject, encode = __find_encoding_info__(email_message['Subject'])
 
                 mail = schema_email.Email()
                 mail.user_id = user_id
-                mail.eml_box = box
                 mail.eml_subject = subject
                 mail.eml_from = email_message['From']
                 mail.eml_to = email_message['To']
@@ -72,19 +72,21 @@ class ImapUtil:
 
                 if email_message.is_multipart():
                     for part in email_message.get_payload():
-                        if part.get_content_type() == 'text/plain':
-                            bytes = part.get_payload(decode=True)
-                            encode = part.get_content_charset()
-                            message = message + str(bytes, encode)
+                            if str(part.get_content_type()).startswith("html"):
+                                # 멀티파트 일때 부분적으로 메시지를 가져 온다.
+                                message_part = part.get_payload(decode=True)
+                                # 디코딩을 했는데 정보가 없다면 디코드를 하지 않고 가져 온다.
+                                if message_part is None:
+                                    message_part = part.get_payload(decode=False)
+                                    # 이때는 배열형으로 가져 오기 때문에 아이템을 나눠서 넣어준다.
+                                    for p in message_part:
+                                        message += str(p)
+                                else:
+                                    message += message_part
                 else:
-                    if email_message.get_content_type() == "text/plain":
-                        bytes = email_message.get_payload(decode=True)
-                        encode = email_message.get_content_charset()
-                        message = str(bytes, encode)
-                    if email_message.get_content_type() == "text/html":
-                        html_bytes = email_message.get_payload(decode=True)
-                        encode = email_message.get_content_charset()
-                        message = str(html_bytes, encode)
+                    bytes = email_message.get_payload(decode=True)
+                    encode = email_message.get_content_charset()
+                    message = bytes.decode(encode, "ignore")
 
                 mail.eml_content = message
 
@@ -100,6 +102,7 @@ class ImapUtil:
                     file_name = part.get_filename()
 
                     if bool(file_name):
+                        os.makedirs(const.STORAGE_PATH, exist_ok=True)
                         file_path = os.path.join(const.STORAGE_PATH, file_name)
                         attach.file_path = file_path
                         attach.file_name = file_name

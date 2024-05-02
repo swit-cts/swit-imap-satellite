@@ -25,6 +25,7 @@ from app.routers import (
     router_email,
     router_auth,
     router_admin,
+    router_user,
 )
 
 
@@ -39,8 +40,8 @@ async def lifespan(app: FastAPI):
 env = const.ENV
 
 app = FastAPI(
-    title="Swit for Outlook Server",
-    description="Swit for Outlook Back-end service",
+    title="Swit IMAP Server for customers",
+    description="IMAP API Server",
     lifespan=lifespan,
     docs_url=None if env == "prod" else "/docs",
     redoc_url=None if env == "prod" else "/redoc"
@@ -115,6 +116,7 @@ def include_routers():
     app.include_router(router_email.router)
     app.include_router(router_auth.router)
     app.include_router(router_admin.router)
+    app.include_router(router_user.router)
 
 
 def init_database():

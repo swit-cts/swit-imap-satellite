@@ -94,3 +94,13 @@ def disable_users(user_ids):
                 session.commit()
             except Exception as e:
                 session.rollback()
+
+
+def get_user(user_id: str) -> Optional[model_user.UserInfo]:
+    try:
+        result = db.session.query(model_user.UserInfo).filter_by(user_id=user_id, is_active=True).one_or_none()
+        return result
+    except Exception as e:
+        raise e
+
+

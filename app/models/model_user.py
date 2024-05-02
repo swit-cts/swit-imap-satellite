@@ -17,6 +17,8 @@ class UserInfo(Base):
     created_at: datetime | Column = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow() + timedelta(hours=9))
     role: str | Column = Column(String(10), name="role", nullable=False, default="MEMBER")
     is_active: bool | Column = Column(Boolean, name="is_active", nullable=False, default=True)
+    access_token: str | Column = Column(String(255), name="access_token", nullable=True)
+    refresh_token: str | Column = Column(String(255), name="refresh_token", nullable=True)
 
 
 class UserEmailAuth(Base):
