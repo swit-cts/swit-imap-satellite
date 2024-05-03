@@ -8,7 +8,7 @@ from app.models import model_user
 from app.util import security, encrypt
 
 
-async def get_user(email: str) -> Optional[model_user.UserInfo]:
+async def get_user_by_email(email: str) -> Optional[model_user.UserInfo]:
     with db.session as session:
         try:
             result = session.query(model_user.UserInfo).filter_by(email=email).one_or_none()
@@ -75,15 +75,6 @@ def get_all_users() -> Optional[list[model_user.UserInfo]]:
         result = session.query(model_user.UserInfo).all()
         return result
 
-
-def get_email_info(user_id: str):
-    try:
-        result = db.session.query(model_user.UserEmailAuth).filter_by(user_id=user_id).one_or_none()
-        email_addr: str = result.email
-        password: str = result.password
-        return email_addr, password
-    except Exception as e:
-        raise e
 
 
 def disable_users(user_ids):

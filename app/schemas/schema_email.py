@@ -30,3 +30,18 @@ class Email(BaseModel):
 
     class Config:
         from_attribute = True
+
+
+class EmailListResponse(BaseModel):
+    eml_id: str | None = Field(title="eml_id", description="이메일 아이디", max_length=36, default=None)
+    user_id: str | None = Field(title="user_id", description="사용자 아이디", max_length=36, default=None)
+    eml_uid: int | None = Field(title="uid", description="이메일 uid", default=None)
+    eml_from: str | None = Field(title="eml_from", description="보낸 사람", max_length=255, default=None)
+    eml_sender: str | None = Field(title="eml_sender", description="sender", default=None)
+    eml_to: str | None = Field(title="eml_to", max_length=255, description="받는 사람", default=None)
+    eml_subject: str | None = Field(title="eml_subject", description="메일 제목", default=None)
+    received_at: str | None = Field(title="received_at", description="수신 일시", default=None)
+    attach_count: int | None = Field(title="attach_count", description="첨부 파일 수", default=None)
+
+    class Config:
+        from_attribute = True

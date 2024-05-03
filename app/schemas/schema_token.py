@@ -11,6 +11,7 @@ class TokenData(BaseModel):
 class Token(BaseModel):
     access_token: str | None = Field(title="access_token", description="인증용 토큰", max_length=255, default=None)
     refresh_token: str | None = Field(title="refresh_token", description="갱신용 토큰", max_length=100, default=None)
+    token_type: str | None = Field(title="token_type", description="토큰 유형", default="Bearer")
     expires_in: int | None = Field(title="expires_in", description="만료 시간", default=None)
     expires_at: datetime | None = Field(title="expires_at", description="만료 예정 일시", default=None)
 

@@ -96,6 +96,8 @@ async def validation_exception_handler(request, exc):
 
 app.add_middleware(middleware_class=DBSessionMiddleware, db_url=const.DB_URL)
 
+# Background scheduler
+
 # CORS
 origins = ['*']
 
@@ -151,7 +153,6 @@ async def startup():
     include_routers()
     # Initialize database tables
     init_database()
-
 
 async def shutdown_event():
     """
