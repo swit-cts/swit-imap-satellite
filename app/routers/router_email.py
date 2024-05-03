@@ -48,10 +48,19 @@ async def get_emails(
         search_option: str | None= Query(title="search_option", description="검색 옵션", default=None),
         order_column: str | None= Query(title="order_column", description="정렬 기준 컬럼", default=None),
         order_direction: str | None= Query(title="order_direction", description="정렬 방향", default=None),
+        offset: int | None= Query(title="offset", description="레코드 시작 번호", default=None),
+        limit: int  | None= Query(title="limit", description="보여줄 레코드 수", default=None),
 ):
     """
     이메일 목록을 가져 온다.
+
     :param current_user: 로그인한 사용자
+    :param keyword: 검색어
+    :param search_option: 검색 옵션
+    :param order_column: 정렬기준 컬럼
+    :param order_direction: 정렬 방향
+    :param offset: 레코드 시작 번호
+    :param limit: 보여줄 레코드 수
     :return:
     """
     try:
@@ -60,7 +69,9 @@ async def get_emails(
             keyword=keyword,
             search_option=search_option,
             order_column=order_column,
-            order_direction=order_direction
+            order_direction=order_direction,
+            offset=offset,
+            limit=limit
         )
         return ret_list
     except Exception as e:
@@ -84,6 +95,8 @@ async def get_email(
         ret_mail = await service_mail.get_email(eml_id=eml_id)
         if current_user.user_id != ret_mail.user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="잘못된 접근 입니다.")
+        # 읽음 처리
+        await service_mail.update_read_email(eml_id=eml_id, is_read=True)
         return ret_mail
     except Exception as e:
         logger.error(e)

@@ -16,17 +16,31 @@ class SearchOption(Enum):
     CONTENT = "content"
     FROM = "from"
 
-
-
-
 async def get_emails(
         user_id: str,
         keyword: str | None = None,
         search_option: str | None = None,
         order_column: str | None = None,
-        order_direction: str | None = None
+        order_direction: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
 ) -> list[schema_email.EmailListResponse]:
+    """
+    이메일 목록을 조회한다.
+    :param user_id: 사용자 아이디
+    :param keyword: 검색어
+    :param search_option: 검색옵션
+    :param order_column: 정렬 기준 컬럼
+    :param order_direction: 정렬 방향
+    :return:
+    """
     mail_list: list[schema_email.EmailListResponse] = []
+
+    if offset is None:
+        offset = 0
+
+    if limit is None:
+        limit = 10
 
     if order_column is None:
         order_column = "received_at"
@@ -34,7 +48,7 @@ async def get_emails(
         order_direction = "desc"
 
     try:
-        sql = """
+        sql = f"""
             select
                  a.eml_id
                 ,a.user_id
@@ -44,25 +58,30 @@ async def get_emails(
                 ,a.eml_from
                 ,a.eml_to
                 ,a.received_at
+                ,a.is_read
                 ,(SELECT COUNT(*) FROM eml_attachment_info eai WHERE eai.eml_id = a.eml_id) AS attach_count
             from
                 eml_mail_info a
+            where
+                a.user_id = '{user_id}'
         """
         if search_option is not None:
             if search_option == "subject":
-                sql += f" where a.eml_subject like '%{keyword}%'"
+                sql += f" and a.eml_subject like '%{keyword}%'"
             elif search_option == "content":
-                sql += f" where a.eml_content like '%{keyword}%'"
+                sql += f" and a.eml_content like '%{keyword}%'"
             elif search_option == "from":
-                sql += f" where a.eml_from like '%{keyword}%'"
+                sql += f" and a.eml_from like '%{keyword}%'"
             else:
                 pass
         sql += f" order by {order_column} {order_direction}"
+        sql += f" limit {offset}, {limit}"
 
         print(sql)
 
         # 먼저 이메일 정보를 가져온다.
         ret_list: list[schema_email.EmailListResponse] = db.session.execute(text(sql)).all()
+        # 쿼리에서 뽑을 경우 K,V 매핑이 되지 않으므로, 수동으로 할당 해 준다.
         mail_list = [
             schema_email.EmailListResponse(
                 eml_id=i.eml_id,
@@ -73,6 +92,7 @@ async def get_emails(
                 eml_from=i.eml_from,
                 eml_to=i.eml_to,
                 attach_count=i.attach_count,
+                is_read=i.is_read,
                 received_at=i.received_at) for i in ret_list
         ]
 
@@ -82,7 +102,13 @@ async def get_emails(
 
 
 async def get_email(eml_id: str) -> schema_email.Email:
+    """
+    이메일 상세 정보 조회
+    :param eml_id: 이메일 아이디
+    :return:
+    """
     try:
+        # 이메일 정보 조회
         ret_obj: schema_email.Email = db.session.query(Email).filter(Email.eml_id == eml_id).one()
         attach_list = db.session.query(EmailAttachment).filter(EmailAttachment.eml_id == eml_id).all()
         ret_obj.attaches = attach_list
@@ -105,6 +131,22 @@ def is_exists(user_id: str, eml_uid: int) -> bool:
     except Exception as e:
         print(str(e))
         return False
+
+
+async def update_read_email(eml_id: str, is_read: bool) -> None:
+    """
+    읽음 처리
+    :param eml_id: 이메일 아이디
+    :param is_read: 읽음 여부
+    :return:
+    """
+    try:
+        email = db.session.query(Email).filter(Email.eml_id == eml_id).one()
+        email.read = is_read
+        db.session.add(email)
+        db.session.commit()
+    except SQLAlchemyError as exc:
+        db.session.rollback()
 
 
 def get_email_info(user_id: str):
