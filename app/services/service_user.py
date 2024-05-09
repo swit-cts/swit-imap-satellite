@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import uuid4
 from sqlalchemy import Update
-from sqlalchemy.exc import NoResultFound, IntegrityError
+from sqlalchemy.exc import NoResultFound, IntegrityError, SQLAlchemyError
 from datetime import datetime, timedelta
 from fastapi_sqlalchemy import db
 from app.models import model_user
@@ -30,7 +30,7 @@ def create_user(email: str, password: str) -> None:
             create_at: datetime = datetime.utcnow() + timedelta(hours=9)
             hashed_password = security.get_hashed_password(password)
             encrypt_password = aes.encrypt(password)
-            new_user_id:str = str(uuid4())
+            new_user_id: str = str(uuid4())
             # 사용자 정보 저장
             new_user = model_user.UserInfo(
                 user_id=new_user_id,
@@ -76,14 +76,14 @@ def get_all_users() -> Optional[list[model_user.UserInfo]]:
         return result
 
 
-
 def disable_users(user_ids):
     with db.session as session:
         for user_id in user_ids:
             try:
+                # 사용자의 활성화 상태를 변경한다.
                 session.query(model_user.UserInfo).filter_by(user_id=user_id).update({"is_active": False})
                 session.commit()
-            except Exception as e:
+            except SQLAlchemyError as e:
                 session.rollback()
 
 
@@ -93,5 +93,3 @@ def get_user(user_id: str) -> Optional[model_user.UserInfo]:
         return result
     except Exception as e:
         raise e
-
-

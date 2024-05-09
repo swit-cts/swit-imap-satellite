@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
-from app.schemas import schema_email, schema_user
+from app.schemas import schema_user
 from app.services import service_mail
 from app.util import security
 
@@ -14,6 +14,25 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/signin")
 
 router = APIRouter(prefix="/eml", tags=["Email"])
 
+
+@router.get(path="/box.list")
+async def get_box_list(
+        current_user: Annotated[schema_user.UserInfo, Depends(security.get_current_user)]
+):
+    try:
+        ret_list = []
+        box_list = await service_mail.get_box_list(user_id=current_user.user_id)
+        # INBOX, Sent Messages를 순서상 맨 앞으로 놓는다.
+        ret_list.append({"box_id": "INBOX", "box_nm": "받은메일함"})
+        ret_list.append({"box_id": "Sent Messages", "box_nm": "보낸메일함"})
+
+        for box in box_list:
+            if box.box_nm not in ["INBOX", "Sent Messages"]:
+                ret_list.append({"box_id": box.box_nm, "box_nm": box.box_nm})
+
+        return ret_list
+    except Exception as e:
+        raise HTTPException()
 
 @router.get(
     path="/email.sync",
@@ -30,20 +49,20 @@ async def get_email_sync(
     * :return:
     """
     try:
-        # 이메일 동기화를 한다.
         save_count = await service_mail.get_sync_imap(current_user.user_id)
         ret_list = await service_mail.get_emails(user_id=current_user.user_id)
         return {"received": save_count, "data": ret_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get(
     path="/email.list",
-    response_class=JSONResponse,
-    response_model=list[schema_email.EmailListResponse]
+    response_class=JSONResponse
 )
 async def get_emails(
         current_user: Annotated[schema_user.UserInfo, Depends(security.get_current_user)],
+        box_id: str | None = Query(title="box_id", description="메일함", default=None),
         keyword: str | None = Query(title="keyword", description="검색어", default=None),
         search_option: str | None= Query(title="search_option", description="검색 옵션", default=None),
         order_column: str | None= Query(title="order_column", description="정렬 기준 컬럼", default=None),
@@ -55,6 +74,7 @@ async def get_emails(
     이메일 목록을 가져 온다.
 
     :param current_user: 로그인한 사용자
+    :param box_id: 메일함
     :param keyword: 검색어
     :param search_option: 검색 옵션
     :param order_column: 정렬기준 컬럼
@@ -64,8 +84,15 @@ async def get_emails(
     :return:
     """
     try:
+        total_count = await service_mail.get_total_count(
+            user_id=current_user.user_id,
+            box_id=box_id,
+            keyword=keyword,
+            search_option=search_option
+        )
         ret_list = await service_mail.get_emails(
             user_id=current_user.user_id,
+            box_id=box_id,
             keyword=keyword,
             search_option=search_option,
             order_column=order_column,
@@ -73,7 +100,7 @@ async def get_emails(
             offset=offset,
             limit=limit
         )
-        return ret_list
+        return {"records": total_count, "data": ret_list}
     except Exception as e:
         raise e
 

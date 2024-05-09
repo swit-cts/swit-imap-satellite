@@ -7,8 +7,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.util import encrypt
 from app.util.imap import ImapUtil, ImapSearchOption
 from app.schemas import schema_email
-from app.models.model_email import Email, EmailAttachment
-from app.models import model_user
+from app.models.model_email import Email, EmailAttachment, EmailBox
+from app.models import model_user, model_email
 
 
 class SearchOption(Enum):
@@ -16,8 +16,10 @@ class SearchOption(Enum):
     CONTENT = "content"
     FROM = "from"
 
+
 async def get_emails(
         user_id: str,
+        box_id: str | None = None,
         keyword: str | None = None,
         search_option: str | None = None,
         order_column: str | None = None,
@@ -28,6 +30,7 @@ async def get_emails(
     """
     이메일 목록을 조회한다.
     :param user_id: 사용자 아이디
+    :param box_id : 메일박스
     :param keyword: 검색어
     :param search_option: 검색옵션
     :param order_column: 정렬 기준 컬럼
@@ -51,6 +54,7 @@ async def get_emails(
         sql = f"""
             select
                  a.eml_id
+                ,a.box_nm
                 ,a.user_id
                 ,a.eml_uid
                 ,a.eml_subject
@@ -65,6 +69,9 @@ async def get_emails(
             where
                 a.user_id = '{user_id}'
         """
+        if box_id is not None:
+            sql += f" and a.box_nm = {box_id}"
+
         if search_option is not None:
             if search_option == "subject":
                 sql += f" and a.eml_subject like '%{keyword}%'"
@@ -97,6 +104,55 @@ async def get_emails(
         ]
 
         return mail_list
+    except SQLAlchemyError as exc:
+        raise exc
+
+
+async def get_total_count(
+        user_id: str,
+        box_id: str | None = None,
+        keyword: str | None = None,
+        search_option: str | None = None,
+) -> int:
+    """
+    이메일 목록을 조회한다.
+    :param user_id: 사용자 아이디
+    :param box_id : 메일박스
+    :param keyword: 검색어
+    :param search_option: 검색옵션
+    :param order_column: 정렬 기준 컬럼
+    :param order_direction: 정렬 방향
+    :return:
+    """
+    total_count = 0
+
+    try:
+        sql = f"""
+            select
+                 count(*)
+            from
+                eml_mail_info a
+            where
+                a.user_id = '{user_id}'
+        """
+        if box_id is not None:
+            sql += f" and a.box_nm = {box_id}"
+
+        if search_option is not None:
+            if search_option == "subject":
+                sql += f" and a.eml_subject like '%{keyword}%'"
+            elif search_option == "content":
+                sql += f" and a.eml_content like '%{keyword}%'"
+            elif search_option == "from":
+                sql += f" and a.eml_from like '%{keyword}%'"
+            else:
+                pass
+
+        print(sql)
+
+        result = db.session.execute(text(sql)).one_or_none()
+        total_count = int(result[0])
+        return total_count
     except SQLAlchemyError as exc:
         raise exc
 
@@ -159,6 +215,14 @@ def get_email_info(user_id: str):
         raise e
 
 
+async def get_box_list(user_id: str):
+    try:
+        box_list = db.session.query(model_email.EmailBox).filter(model_email.EmailBox.user_id == user_id).all()
+        return box_list
+    except Exception as e:
+        raise e
+
+
 async def get_sync_imap(user_id: str) -> int:
     """
     IMAP 서버와 정보 동기화
@@ -174,29 +238,25 @@ async def get_sync_imap(user_id: str) -> int:
         imap = ImapUtil()
         # 서비스 접속
         imap.connect(user_id=email, password=encrypted_password)
-        # 받은 메일함에서 읽지 않은 메일을 가져온다.
-        result, [msg_ids] = imap.search(mailbox="INBOX", option=ImapSearchOption.UNSEEN)
+        # 메일함을 저장후 가져온다.
+        box_list = imap.get_box_list()
+        # 받은 메일함 목록을 저장한다.
+        result = save_box_list(user_id=user_id, mail_box_list=box_list)
         if result == "OK":
-            if len(msg_ids.split()) > 0:
-                for uid in msg_ids.split():
-                    # UID를 이용해서 이메일을 읽어 온다.
-                    email: schema_email.Email = imap.get_message(user_id=user_id, uid=uid)
-                    email.eml_uid = int(uid)
-                    # 수집 목록에 넣어준다.
-                    mails.append(email)
-                # 저장한다.
-                saved_count = save_emails(mails=mails)
+            # 메일함 저장이 성공하면 메일을 읽어온다.
+            for box in box_list:
+                messages = imap.get_messages(user_id=user_id, box=box)
+                if len(messages) > 0:
+                    saved_count += len(messages)
+                    save_emails(mails=messages)
         else:
             raise Exception(result)
-        imap.close()
         return saved_count
     except Exception as e:
         print(e)
 
 
-def save_emails(mails: list[schema_email.Email]) -> int:
-    saved_count = 0
-
+def save_emails(mails: list[schema_email.Email]) -> None:
     try:
         for mail in mails:
             if not is_exists(mail.user_id, mail.eml_uid):
@@ -204,6 +264,7 @@ def save_emails(mails: list[schema_email.Email]) -> int:
                 email = Email(
                     eml_id=eml_id,
                     eml_uid=mail.eml_uid,
+                    box_nm=mail.box_nm,
                     user_id=mail.user_id,
                     eml_from=mail.eml_from,
                     eml_sender=mail.eml_sender,
@@ -218,15 +279,40 @@ def save_emails(mails: list[schema_email.Email]) -> int:
                 for attach in mail.attaches:
                     attachment = EmailAttachment(
                         eml_id=eml_id,
+                        attach_id=attach.attach_id,
                         file_name=attach.file_name,
                         file_size=attach.file_size,
                         content_type=attach.content_type,
                         file_path=attach.file_path
                     )
                     db.session.add(attachment)
-                saved_count += 1
             db.session.commit()
-        return saved_count
     except SQLAlchemyError as exc:
         db.session.rollback()
         raise exc
+
+
+def save_box_list(user_id, mail_box_list):
+    """
+    개인별 메일함을 저장한다.
+    :param user_id: 사용자 아이디
+    :param mail_box_list: 메일함 목록
+    :return:
+    """
+    save_list: list[model_email.EmailBox] = []
+    try:
+        for mail_box in mail_box_list:
+            eml_box = model_email.EmailBox(user_id=user_id, box_nm=mail_box)
+            try:
+                existed_box = db.session.query(model_email.EmailBox).filter(
+                    model_email.EmailBox.user_id == user_id,
+                    model_email.EmailBox.box_nm == mail_box).one_or_none()
+                if existed_box is None:
+                    db.session.add(eml_box)
+                    db.session.commit()
+            except SQLAlchemyError as exc:
+                db.session.rollback()
+                raise exc
+        return "OK"
+    except Exception as e:
+        raise e

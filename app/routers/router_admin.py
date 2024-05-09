@@ -30,6 +30,14 @@ async def get_admin_users(request: Request):
     return templates.TemplateResponse("/admin/user_list.html", {"request": request, "users": users})
 
 
+@router.get(
+    path="/env",
+    response_class=HTMLResponse
+)
+async def get_admin_env(request: Request):
+    return templates.TemplateResponse("/admin/setting.html", {"request": request})
+
+
 @router.post(
     path="/user.disable",
 )
@@ -37,5 +45,5 @@ async def post_admin_user_disable(request: Request):
     user_ids = await request.body()
     user_ids = user_ids.decode("utf-8").split(",")
     service_user.disable_users(user_ids)
-    return {"message": "저장되었습니다."}
+    return {"message": "저장 되었습니다."}
 
