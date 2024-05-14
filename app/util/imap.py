@@ -1,7 +1,7 @@
 import os
 
 from uuid import uuid4
-from imap_tools import MailBox, FolderInfo, MailMessage
+from imap_tools import MailBox, FolderInfo, MailMessage, MailMessageFlags, A
 from enum import Enum
 from email import policy
 from email.header import decode_header
@@ -48,12 +48,19 @@ class ImapUtil:
                     ret_list.append(box.name)
             return ret_list
 
-    def close(self):
+    def update_read(self, uid: list[str]):
         """
-        Close the mailbox
+        메일 읽음 처리
+        :param uids: 읽음 처리할 아이디
         :return:
         """
-        self.session.close()
+        try:
+            with self.session as mailbox:
+                mailbox.flag(uid_list=uid, flag_set=MailMessageFlags.SEEN, value=True)
+        except Exception as e:
+            raise e
+
+    def logout(self):
         self.session.logout()
 
     def get_messages(self, user_id: str, box: str):
@@ -67,8 +74,8 @@ class ImapUtil:
                     mail.box_nm = box
                     mail.eml_subject = msg.subject
                     mail.eml_from = msg.from_
-                    mail.eml_sender = str(msg.cc).replace("(", '').replace(")", '').replace("'","")
-                    mail.eml_to = str(msg.to).replace("(", '').replace(")", '').replace("'","")
+                    mail.eml_sender = str(msg.cc).replace("(", '').replace(")", '').replace("'", "")
+                    mail.eml_to = str(msg.to).replace("(", '').replace(")", '').replace("'", "")
                     mail.received_at = msg.date_str
                     mail.eml_content = msg.html
                     mail.eml_uid = msg.uid

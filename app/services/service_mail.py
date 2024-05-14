@@ -35,6 +35,8 @@ async def get_emails(
     :param search_option: 검색옵션
     :param order_column: 정렬 기준 컬럼
     :param order_direction: 정렬 방향
+    :param offset: 시작 Row
+    :param limit: 보여줄 레코드 수
     :return:
     """
     mail_list: list[schema_email.EmailListResponse] = []
@@ -70,7 +72,7 @@ async def get_emails(
                 a.user_id = '{user_id}'
         """
         if box_id is not None:
-            sql += f" and a.box_nm = {box_id}"
+            sql += f" and a.box_nm = '{box_id}'"
 
         if search_option is not None:
             if search_option == "subject":
@@ -82,9 +84,7 @@ async def get_emails(
             else:
                 pass
         sql += f" order by {order_column} {order_direction}"
-        sql += f" limit {offset}, {limit}"
-
-        print(sql)
+        sql += f" limit {limit} offset {offset}"
 
         # 먼저 이메일 정보를 가져온다.
         ret_list: list[schema_email.EmailListResponse] = db.session.execute(text(sql)).all()
@@ -94,6 +94,7 @@ async def get_emails(
                 eml_id=i.eml_id,
                 user_id=i.user_id,
                 eml_uid=i.eml_uid,
+                box_nm=i.box_nm,
                 eml_subject=i.eml_subject,
                 eml_sender=i.eml_sender,
                 eml_from=i.eml_from,
@@ -136,7 +137,7 @@ async def get_total_count(
                 a.user_id = '{user_id}'
         """
         if box_id is not None:
-            sql += f" and a.box_nm = {box_id}"
+            sql += f" and a.box_nm = '{box_id}'"
 
         if search_option is not None:
             if search_option == "subject":
@@ -157,7 +158,7 @@ async def get_total_count(
         raise exc
 
 
-async def get_email(eml_id: str) -> schema_email.Email:
+def get_email(eml_id: str) -> schema_email.Email:
     """
     이메일 상세 정보 조회
     :param eml_id: 이메일 아이디
@@ -189,7 +190,7 @@ def is_exists(user_id: str, eml_uid: int) -> bool:
         return False
 
 
-async def update_read_email(eml_id: str, is_read: bool) -> None:
+def update_read_email(eml_id: str, is_read: bool) -> None:
     """
     읽음 처리
     :param eml_id: 이메일 아이디
@@ -197,10 +198,20 @@ async def update_read_email(eml_id: str, is_read: bool) -> None:
     :return:
     """
     try:
-        email = db.session.query(Email).filter(Email.eml_id == eml_id).one()
-        email.read = is_read
-        db.session.add(email)
+        sql = f"UPDATE eml_mail_info SET is_read = {int(is_read)} WHERE eml_id = '{eml_id}'"
+        db.session.execute(text(sql))
         db.session.commit()
+        # IMAP에서 읽음 처리 한다.
+        email: schema_email.Email = get_email(eml_id)
+        username, password = get_email_info(user_id=email.user_id)
+        aes = encrypt.AESCipher(username)
+        encrypted_password = aes.decrypt(password)
+        imap = ImapUtil()
+        # 서비스 접속
+        imap.connect(user_id=username, password=encrypted_password)
+        # 읽음 처리
+        imap.update_read([str(email.eml_uid)])
+        imap.logout()
     except SQLAlchemyError as exc:
         db.session.rollback()
 
@@ -230,8 +241,6 @@ async def get_sync_imap(user_id: str) -> int:
     """
     try:
         saved_count = 0
-        # 수집할 이메일의 목록
-        mails: list[schema_email.Email] = []
         email, password = get_email_info(user_id=user_id)
         aes = encrypt.AESCipher(email)
         encrypted_password = aes.decrypt(password)
@@ -251,6 +260,7 @@ async def get_sync_imap(user_id: str) -> int:
                     save_emails(mails=messages)
         else:
             raise Exception(result)
+        imap.logout()
         return saved_count
     except Exception as e:
         print(e)

@@ -67,8 +67,8 @@ async def get_emails(
         search_option: str | None= Query(title="search_option", description="검색 옵션", default=None),
         order_column: str | None= Query(title="order_column", description="정렬 기준 컬럼", default=None),
         order_direction: str | None= Query(title="order_direction", description="정렬 방향", default=None),
-        offset: int | None= Query(title="offset", description="레코드 시작 번호", default=None),
-        limit: int  | None= Query(title="limit", description="보여줄 레코드 수", default=None),
+        page: int | None= Query(title="page", description="페이지 번호", default=0),
+        page_size: int  | None= Query(title="page_size", description="한 페이지에 보여줄 레코드 수", default=15),
 ):
     """
     이메일 목록을 가져 온다.
@@ -79,11 +79,12 @@ async def get_emails(
     :param search_option: 검색 옵션
     :param order_column: 정렬기준 컬럼
     :param order_direction: 정렬 방향
-    :param offset: 레코드 시작 번호
-    :param limit: 보여줄 레코드 수
+    :param page: 페이지 번호
+    :param page_size: 한 페이지에 보여줄 레코드 수
     :return:
     """
     try:
+        page_num = page * page_size
         total_count = await service_mail.get_total_count(
             user_id=current_user.user_id,
             box_id=box_id,
@@ -97,8 +98,8 @@ async def get_emails(
             search_option=search_option,
             order_column=order_column,
             order_direction=order_direction,
-            offset=offset,
-            limit=limit
+            offset=page_num,
+            limit=page_size
         )
         return {"records": total_count, "data": ret_list}
     except Exception as e:
@@ -119,12 +120,25 @@ async def get_email(
     :return:
     """
     try:
-        ret_mail = await service_mail.get_email(eml_id=eml_id)
+        ret_mail = service_mail.get_email(eml_id=eml_id)
+        print(ret_mail.eml_subject)
         if current_user.user_id != ret_mail.user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="잘못된 접근 입니다.")
-        # 읽음 처리
-        await service_mail.update_read_email(eml_id=eml_id, is_read=True)
         return ret_mail
     except Exception as e:
         logger.error(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.put(
+    path="/email/read",
+)
+async def put_email_read(
+        eml_id: str = Query(title="eml_id", description="읽음/안읽음 처리할 이메일의 아이디"),
+        is_read: bool = Query(title="is_read", description="읽음/안읽음 여부")
+):
+    try:
+        service_mail.update_read_email(eml_id=eml_id, is_read=is_read)
+        return {"status": "ok"}
+    except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -1,6 +1,7 @@
 from typing import Optional
 from uuid import uuid4
 from sqlalchemy import Update
+from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.exc import NoResultFound, IntegrityError, SQLAlchemyError
 from datetime import datetime, timedelta
 from fastapi_sqlalchemy import db
@@ -31,26 +32,35 @@ def create_user(email: str, password: str) -> None:
             hashed_password = security.get_hashed_password(password)
             encrypt_password = aes.encrypt(password)
             new_user_id: str = str(uuid4())
-            # 사용자 정보 저장
-            new_user = model_user.UserInfo(
+
+            stmt = insert(model_user.UserInfo).values({
+                "user_id": new_user_id,
+                "email": email,
+                "password": hashed_password,
+                "created_at": create_at,
+                "is_active": True,
+                "role": "MEMBER"
+            })
+
+            stmt = stmt.on_duplicate_key_update(
                 user_id=new_user_id,
-                email=email,
-                password=hashed_password,
-                created_at=create_at,
-                is_active=True,
-                role="MEMBER"
+                email=email
             )
-            session.add(new_user)
+            session.execute(stmt)
             session.flush()
             # 이메일 정보 저장
-            email_auth = model_user.UserEmailAuth(
+            stmt = insert(model_user.UserEmailAuth).values({
+                "user_id": new_user_id,
+                "email": email,
+                "password": encrypt_password,
+                "created_at": create_at,
+                "updated_at": create_at
+            })
+            stmt.on_duplicate_key_update(
                 user_id=new_user_id,
-                email=email,
-                password=encrypt_password,
-                created_at=create_at,
-                updated_at=create_at
+                email=email
             )
-            session.add(email_auth)
+            session.execute(stmt)
             session.commit()
         except IntegrityError as e:
             session.rollback()
