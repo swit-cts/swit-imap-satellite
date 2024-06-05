@@ -4,8 +4,10 @@
 .env.dev
 .env.prod
 *.pyc
+.project
 __pycache__/
 .idea/dataSources.xml
 log
 log.*
+storage/
 requirements.txt

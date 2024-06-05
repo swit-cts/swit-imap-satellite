@@ -11,6 +11,8 @@ class Email(Base):
     eml_id: str | Column = Column(String(36), name="eml_id", nullable=False, primary_key=True, unique=True, default=str(uuid4()))
     # 메일 UID
     eml_uid: str | Column = Column(Integer, name="eml_uid", nullable=False, default=None)
+    # 메일 박스
+    box_nm: str | Column = Column(String(255), name="box_nm", nullable=False, default=None)
     # 사용자 아이디
     user_id: str | Column = Column(String(36), name="user_id", nullable=False)
     # 보낸사람
@@ -33,6 +35,7 @@ class Email(Base):
             self,
             eml_id: str,
             eml_uid: int,
+            box_nm: str,
             user_id: str,
             eml_from: str,
             eml_sender: str,
@@ -42,6 +45,7 @@ class Email(Base):
             received_at: str):
         self.eml_id = eml_id
         self.eml_uid = eml_uid
+        self.box_nm = box_nm
         self.user_id = user_id.strip()
         self.eml_from = eml_from.strip()
         self.eml_sender = eml_sender.strip()
@@ -73,7 +77,11 @@ class EmailAttachment(Base):
         self.content_type = content_type.strip()
 
 
+class EmailBox(Base):
+    __tablename__ = 'eml_box'
 
+    user_id: str | Column = Column(String(36), name="user_id", nullable=False, primary_key=True)
+    box_nm: str | Column = Column(String(255), name="box_nm", nullable=False, primary_key=True)
 
 
 
